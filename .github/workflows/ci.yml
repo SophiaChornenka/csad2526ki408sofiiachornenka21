@@ -1,0 +1,71 @@
+name: Cross Platform CI
+on:
+  push:
+    branches:
+      - develop
+      - master
+      - 'feature/**'
+  pull_request:
+    branches:
+      - develop
+      - master
+      - 'feature/**'
+  workflow_dispatch:
+jobs:
+  cross_build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+      fail-fast: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Install CMake and build tools (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++
+        shell: bash
+      - name: Install CMake and build tools (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install cmake gcc || true
+          brew link gcc
+          which g++
+        shell: bash
+      - name: Install CMake (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System'
+        shell: pwsh
+      - name: Verify CI script
+        run: |
+          if ($Env:RUNNER_OS -eq "Windows") {
+            dir ci.bat || { Write-Output "ci.bat not found"; exit 1 }
+          } else {
+            ls -l ci.sh || { echo "ci.sh not found"; exit 1; }
+          }
+        shell: pwsh
+      - name: Run CI script
+        run: |
+          if ($Env:RUNNER_OS -eq "Windows") {
+            .\ci.bat
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+          } else {
+            chmod +x ./ci.sh
+            ./ci.sh || exit 1
+          }
+        shell: pwsh
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: executables-${{ matrix.os }}
+          path: |
+            build/hello
+            build/unit_tests
+            build/Release/hello.exe
+            build/Release/unit_tests.exe
+      - name: Deploy
+        run: echo "Deploy step (to be implemented)"
